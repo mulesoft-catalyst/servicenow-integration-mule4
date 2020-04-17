@@ -1,0 +1,10 @@
+{
+  "sampleData": {
+    "6fa8828f-fc06-41fb-98ad-23a689f6bc3a": {
+      "vars-RequestNumber": "sample_data/unknown.dwl",
+      "vars-HeaderRequest": "sample_data/object.dwl",
+      "vars-sysID": "sample_data/unknown.json",
+      "vars-tasksVar": "sample_data/json.json"
+    }
+  }
+}

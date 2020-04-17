@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:servicenow="http://www.mulesoft.org/schema/mule/servicenow"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/servicenow http://www.mulesoft.org/schema/mule/servicenow/current/mule-servicenow.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="usingSNConn-GetFromTables"
+		doc:id="dfaf2a10-95e9-4232-b377-8ae70adfd353">
+		<http:listener doc:name="Listener"
+			doc:id="cfc030f6-1472-4251-9275-1f3787e4e112"
+			config-ref="HTTP_Listener_config" path="/getRequests" />
+		<servicenow:invoke doc:name="Invoke"
+			doc:id="c8c9ff13-d35c-4fbd-993a-21858fc82080"
+			config-ref="ServiceNow_Config" service="task" operation="getRecords">
+			<servicenow:message>
+				<servicenow:body><![CDATA[#[%dw 2.0
+output application/xml
+ns req http://www.service-now.com/sc-req_item
+---
+{
+    req#getRecords: {
+       
+    }
+}]]]></servicenow:body>
+			</servicenow:message>
+		</servicenow:invoke>
+	</flow>
+	<flow name="servicenow-getItemNtasksFromOneRequest"
+		doc:id="6f4f6f9d-9e08-4737-a90c-ac14af6636a1">
+		<http:listener doc:name="Listener"
+			doc:id="ed59ef92-91e2-4725-bd60-07f902138586"
+			config-ref="HTTP_Listener_config" path="/getItemTask" />
+		<set-variable value="#[attributes.queryParams.'number']"
+			doc:name="RequestNumber"
+			doc:id="f2f66e53-4134-4718-b870-4fd052f0155e"
+			variableName="RequestNumber" />
+		<servicenow:invoke service="sc_request"
+			operation="getRecords" doc:name="RetrieveRequest"
+			doc:id="d5a05808-148f-40da-9cd5-c4ac26e52215"
+			config-ref="ServiceNow_Config">
+			<servicenow:message>
+				<servicenow:body><![CDATA[#[%dw 2.0
+output application/xml
+ns req http://www.service-now.com/sc-request
+---
+{
+    req#getRecords: {
+        req#number: vars.RequestNumber
+    }
+}]]]></servicenow:body>
+			</servicenow:message>
+		</servicenow:invoke>
+		<ee:transform doc:name="sysID"
+			doc:id="004109c0-2327-4207-a487-27718b55b061">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="sysID"><![CDATA[%dw 2.0
+output application/json
+ns ns0 http://www.service-now.com/sc_request
+---
+payload.body.getRecordsResponse.getRecordsResult['sys_id']]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<set-variable value="#[payload]" doc:name="HeaderVar"
+			doc:id="d11601d0-fc56-4762-a5f4-7e97e4842e99"
+			variableName="HeaderRequest" />
+		<logger level="INFO" doc:name="LogSysID"
+			doc:id="50763c5e-0cef-4489-abe3-39b79b1d4832" message="#[vars.sysID]" />
+		<http:request method="GET" doc:name="RetrieveAllItems"
+			doc:id="4ac9a5f9-c01c-4580-b4df-b86c1cba6e8c"
+			config-ref="HTTP_Request_configuration"
+			url="${servicenow.serviceAddress}${servicenow.getRequestItemURI}">
+			<http:headers><![CDATA[#[output application/java
+---
+{
+	"Accept" : "application/json"
+}]]]></http:headers>
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"request" : vars.RequestNumber
+}]]]></http:query-params>
+		</http:request>
+		<set-variable value="#[payload]" doc:name="ItemsVar"
+			doc:id="21e9fbaf-705f-4a7b-9e07-7bf973e0cb81"
+			variableName="AllRequestItems" />
+		<logger level="INFO" doc:name="LogRequestItems"
+			doc:id="17954d2b-dcd5-4afa-93d9-6f8f821c3245" message="#[payload]" />
+		<http:request method="GET"
+			doc:name="RetrieveAllTasksFortheRequest"
+			doc:id="0e2df8ed-2ab9-44ec-bd0d-3a95aac74fc0"
+			config-ref="ServiceNowHTTPConnection" path="${servicenow.getTaskURI}">
+			<http:query-params><![CDATA[#[output application/java
+---
+{
+	"request" : vars.RequestNumber
+}]]]></http:query-params>
+		</http:request>
+		<set-variable value="#[payload]" doc:name="TasksVar"
+			doc:id="6e103c73-a541-46be-8ea5-261792f6da12" variableName="tasksVar" />
+		<logger level="INFO" doc:name="LogTasks"
+			doc:id="58980fee-9e73-41d4-8261-b160c3efe602" message="#[payload]" />
+		<ee:transform doc:name="Consolidate Data"
+			doc:id="6fa8828f-fc06-41fb-98ad-23a689f6bc3a">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+ns ns0 http://www.service-now.com/sc_request
+---
+{
+	RequestNumber: vars.RequestNumber as String,
+	RequestSysID: vars.sysID as String,
+	RequestItems: vars.AllRequestItems.result map ( result , indexOfResult ) -> {
+		RequestItemNumber: result.number,
+		RequestItemSysID: result.sys_id,
+		
+		Tasks: {
+		(vars.tasksVar.result filter ($.*request_item.value contains result.sys_id) map (result101) -> {
+      TaskID : result101.number
+    })
+	}
+	}
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<set-payload value="#[payload]" doc:name="Set Payload"
+			doc:id="8f5d0f1a-834f-4145-8afe-6b07df348669" />
+	</flow>
+	<flow name="servicenow-pocFlow-getSpecificRequestNItem-SNOWConn"
+		doc:id="ade2491f-82f9-498c-8ab2-1f6ba5315ce5">
+		<http:listener doc:name="Listener"
+			doc:id="6235fa77-d6ac-4d8c-9a86-9bdf59ab3fe3"
+			config-ref="HTTP_Listener_config" path="/getSpecificRequest-Item" />
+		<servicenow:invoke doc:name="InvokeREQUEST-get"
+			doc:id="fb833352-a3e0-43af-8255-a68c6c92b910"
+			config-ref="ServiceNow_Config" service="sc_request"
+			operation="getRecords">
+			<servicenow:message>
+				<servicenow:body><![CDATA[#[%dw 2.0
+output application/xml
+ns req http://www.service-now.com/sc-request
+---
+{
+    req#getRecords: {
+        req#number: "REQ0000001"
+    }
+}]]]></servicenow:body>
+			</servicenow:message>
+		</servicenow:invoke>
+		<ee:transform doc:name="Header-Request"
+			doc:id="e9467988-8232-4a00-a04a-cdb1129da062">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="HeaderRequestPayload"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<servicenow:invoke doc:name="InvokeREQUEST-ITEM-get"
+			doc:id="ff97ec44-0eaf-4861-874c-7f9de1da9034"
+			config-ref="ServiceNow_Config" service="sc_req_item"
+			operation="getRecords">
+			<servicenow:message>
+				<servicenow:body><![CDATA[#[%dw 2.0
+output application/xml
+ns req_item http://www.service-now.com/sc_req_item
+---
+{
+    req_item#getRecords: {
+        req_item#number: "RITM0000001"
+    }
+}]]]></servicenow:body>
+			</servicenow:message>
+		</servicenow:invoke>
+		<ee:transform doc:name="Request-Item"
+			doc:id="728d5a68-d56c-4704-ab9e-9b367d285255">
+			<ee:message>
+			</ee:message>
+			<ee:variables>
+				<ee:set-variable variableName="RequestItemPayload"><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-variable>
+			</ee:variables>
+		</ee:transform>
+		<set-payload
+			value="#[vars.HeaderRequestPayload ++ vars.RequestItemPayload]"
+			doc:name="Set Payload" doc:id="6c6f1269-ea9b-4236-8222-4362cf1fef4a"
+			mimeType="application/json" />
+	</flow>
+</mule>

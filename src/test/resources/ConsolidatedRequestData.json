@@ -1,0 +1,33 @@
+{
+	"RequestNumber": "",
+	"RequestSysID": "",
+
+	"RequestItems": [
+
+		{
+			"RequestItemNumber": "",
+			"RequestItemSysID": "",
+			"Tasks": [{
+					"TaskID": ""
+				},
+				{
+					"TaskID": ""
+				}
+			]
+		},
+		{
+			"RequestItemNumber": "",
+			"RequestItemSysID": "",
+			"Tasks": [{
+					"TaskID": ""
+				},
+				{
+					"TaskID": ""
+				}
+			]
+		}
+	]
+
+
+
+}
